@@ -60,7 +60,7 @@ public class DownloadService extends Service {
                 int count;
                 while ((count = input.read(data)) != -1) {
                     total += count;
-                    publishProgress((int) (total * 100 / fileLength));
+                    publishProgress(total, fileLength);
                     output.write(data, 0, count);
                 }
 
@@ -76,17 +76,23 @@ public class DownloadService extends Service {
         @Override
         protected void onProgressUpdate(Integer... values) {
             int progress = values[0];
-            Log.d(TAG, "Progress: " + progress + "%");
+            int fileLength = values[1];
+            Log.d(TAG, "Progress: " + progress + "/" + fileLength);
 
             NotificationCompat.Builder builder = new NotificationCompat.Builder(DownloadService.this, "DownloadChannel")
                     .setContentTitle("Downloading File")
                     .setContentText("Download in progress")
                     .setSmallIcon(R.drawable.ic_download)
                     .setPriority(NotificationCompat.PRIORITY_LOW)
-                    .setProgress(100, progress, false);
+                    .setProgress(fileLength, progress, false);
 
             NotificationManager manager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
             manager.notify(1, builder.build());
+
+            Intent intent = new Intent("com.example.labolatorium4.PROGRESS_UPDATE");
+            PostepInfo postepInfo = new PostepInfo(progress, fileLength, "Pobieranie trwa");
+            intent.putExtra("progress_info", postepInfo);
+            sendBroadcast(intent);
         }
 
         @Override
@@ -107,6 +113,11 @@ public class DownloadService extends Service {
 
             NotificationManager manager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
             manager.notify(1, builder.build());
+
+            Intent progressIntent = new Intent("com.example.labolatorium4.PROGRESS_UPDATE");
+            PostepInfo postepInfo = new PostepInfo(0, 0, "Pobieranie zakończone");
+            progressIntent.putExtra("progress_info", postepInfo);
+            sendBroadcast(progressIntent);
         }
     }
 }

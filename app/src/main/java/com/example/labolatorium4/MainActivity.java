@@ -3,7 +3,10 @@ package com.example.labolatorium4;
 import android.Manifest;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.AsyncTask;
@@ -12,6 +15,7 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 import androidx.annotation.NonNull;
@@ -28,8 +32,12 @@ public class MainActivity extends AppCompatActivity {
     private static final int PERMISSION_REQUEST_CODE = 1;
     private EditText urlEditText;
     private TextView fileInfoTextView;
+    private TextView progressTextView;
+    private ProgressBar progressBar;
     private Button downloadButton;
     private Button downloadFileButton;
+    private PostepInfo postepInfo;
+    private BroadcastReceiver progressReceiver;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -38,6 +46,8 @@ public class MainActivity extends AppCompatActivity {
 
         urlEditText = findViewById(R.id.urlEditText);
         fileInfoTextView = findViewById(R.id.fileInfoTextView);
+        progressTextView = findViewById(R.id.progressTextView);
+        progressBar = findViewById(R.id.progressBar);
         downloadButton = findViewById(R.id.downloadButton);
         downloadFileButton = findViewById(R.id.downloadFileButton);
 
@@ -58,6 +68,42 @@ public class MainActivity extends AppCompatActivity {
         });
 
         createNotificationChannel();
+
+        progressReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                postepInfo = intent.getParcelableExtra("progress_info");
+                updateUI();
+            }
+        };
+
+        registerReceiver(progressReceiver, new IntentFilter("com.example.labolatorium4.PROGRESS_UPDATE"));
+
+        if (savedInstanceState != null) {
+            postepInfo = savedInstanceState.getParcelable("progress_info");
+            updateUI();
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        unregisterReceiver(progressReceiver);
+    }
+
+    @Override
+    protected void onSaveInstanceState(Bundle outState) {
+        super.onSaveInstanceState(outState);
+        outState.putParcelable("progress_info", postepInfo);
+    }
+
+    private void updateUI() {
+        if (postepInfo != null) {
+            fileInfoTextView.setText("Rozmiar pliku: " + postepInfo.mRozmiar + "\nTyp pliku: " + postepInfo.mStatus);
+            progressTextView.setText("Pobrano bajtów: " + postepInfo.mPobranychBajtow);
+            progressBar.setMax(postepInfo.mRozmiar);
+            progressBar.setProgress(postepInfo.mPobranychBajtow);
+        }
     }
 
     private class DownloadFileInfoTask extends AsyncTask<String, Void, String> {
@@ -74,7 +120,9 @@ public class MainActivity extends AppCompatActivity {
                 int fileSize = connection.getContentLength();
                 String fileType = connection.getContentType();
 
-                return "File Size: " + fileSize + " bytes\nFile Type: " + fileType;
+                postepInfo = new PostepInfo(0, fileSize, fileType);
+
+                return "Rozmiar pliku: " + fileSize + " bytes\nTyp pliku: " + fileType;
             } catch (IOException e) {
                 return "Error: " + e.getMessage();
             }
@@ -83,6 +131,7 @@ public class MainActivity extends AppCompatActivity {
         @Override
         protected void onPostExecute(String result) {
             fileInfoTextView.setText(result);
+            updateUI();
         }
     }
 
