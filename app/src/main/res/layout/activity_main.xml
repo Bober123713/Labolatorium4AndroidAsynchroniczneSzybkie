@@ -27,4 +27,12 @@
         android:layout_below="@id/downloadButton"
         android:layout_marginTop="16dp"
         android:text="File info will be displayed here" />
+
+    <Button
+        android:id="@+id/downloadFileButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/fileInfoTextView"
+        android:layout_marginTop="16dp"
+        android:text="Pobierz plik" />
 </RelativeLayout>
