@@ -9,7 +9,6 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.net.Uri;
-import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
@@ -22,10 +21,15 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
-
+import androidx.work.Data;
+import androidx.work.OneTimeWorkRequest;
+import androidx.work.WorkManager;
 import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers;
+import io.reactivex.rxjava3.core.Observable;
+import io.reactivex.rxjava3.schedulers.Schedulers;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -53,15 +57,13 @@ public class MainActivity extends AppCompatActivity {
 
         downloadButton.setOnClickListener(view -> {
             String urlString = urlEditText.getText().toString();
-            new DownloadFileInfoTask().execute(urlString);
+            fetchFileInfo(urlString);
         });
 
         downloadFileButton.setOnClickListener(view -> {
             if (checkPermission()) {
                 String urlString = urlEditText.getText().toString();
-                Intent intent = new Intent(this, DownloadService.class);
-                intent.putExtra("url", urlString);
-                startService(intent);
+                startDownloadService(urlString);
             } else {
                 requestPermission();
             }
@@ -106,33 +108,28 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private class DownloadFileInfoTask extends AsyncTask<String, Void, String> {
+    private void fetchFileInfo(String urlString) {
+        Observable.fromCallable(() -> getFileInfo(urlString))
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(result -> {
+                    fileInfoTextView.setText(result);
+                    updateUI();
+                }, Throwable::printStackTrace);
+    }
 
-        @Override
-        protected String doInBackground(String... urls) {
-            String urlString = urls[0];
-            try {
-                URL url = new URL(urlString);
-                HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-                connection.setRequestMethod("HEAD");
-                connection.connect();
+    private String getFileInfo(String urlString) throws IOException {
+        URL url = new URL(urlString);
+        HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+        connection.setRequestMethod("HEAD");
+        connection.connect();
 
-                int fileSize = connection.getContentLength();
-                String fileType = connection.getContentType();
+        int fileSize = connection.getContentLength();
+        String fileType = connection.getContentType();
 
-                postepInfo = new PostepInfo(0, fileSize, fileType);
+        postepInfo = new PostepInfo(0, fileSize, fileType);
 
-                return "Rozmiar pliku: " + fileSize + " bytes\nTyp pliku: " + fileType;
-            } catch (IOException e) {
-                return "Error: " + e.getMessage();
-            }
-        }
-
-        @Override
-        protected void onPostExecute(String result) {
-            fileInfoTextView.setText(result);
-            updateUI();
-        }
+        return "Rozmiar pliku: " + fileSize + " bytes\nTyp pliku: " + fileType;
     }
 
     private boolean checkPermission() {
@@ -178,5 +175,17 @@ public class MainActivity extends AppCompatActivity {
             NotificationManager manager = getSystemService(NotificationManager.class);
             manager.createNotificationChannel(channel);
         }
+    }
+
+    private void startDownloadService(String urlString) {
+        Data data = new Data.Builder()
+                .putString("url", urlString)
+                .build();
+
+        OneTimeWorkRequest downloadRequest = new OneTimeWorkRequest.Builder(DownloadWorker.class)
+                .setInputData(data)
+                .build();
+
+        WorkManager.getInstance(this).enqueue(downloadRequest);
     }
 }
